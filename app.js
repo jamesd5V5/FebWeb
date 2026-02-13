@@ -8,13 +8,15 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
  */
 const CONFIG = {
   girlfriendName: "Jessie",
-  editedBy: "Edited by James",
+  editedBy: "Made by a Kool Kat ᓚᘏᗢ",
   relationshipStartLocalDate: "2025-10-30",
-  nextVisitLocalDate: "2026-02-13", // YYYY-MM-DD
+  // All "today" / daily keys are based on this zone (not your computer's).
+  displayTimeZone: "America/Los_Angeles", // Pacific
 
-  // LA ↔ SD coordinates (you can replace with your cities)
-  cityA: { name: "Los Angeles", lat: 34.052235, lon: -118.243683 },
-  cityB: { name: "San Diego", lat: 32.715736, lon: -117.161087 },
+  // Monthly anniversaries:
+  // - primary day is the 30th
+  // - if a month doesn't have a 30th (Feb), we use the last day of that month (28 or 29)
+  monthlyAnniversaryDay: 30,
 
   auth: {
     allowedNames: ["james", "jess"],
@@ -41,6 +43,110 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+function parseYmd(s) {
+  if (!s) return null;
+  const [y, m, d] = s.split("-").map((x) => Number(x));
+  if (!y || !m || !d) return null;
+  return { y, m, d };
+}
+
+function ymdToKey(ymd) {
+  const y = ymd?.y;
+  const m = ymd?.m;
+  const d = ymd?.d;
+  if (!y || !m || !d) return "—";
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function getTimeZoneYmd(date, timeZone) {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = dtf.formatToParts(date);
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+  const y = Number(get("year"));
+  const m = Number(get("month"));
+  const d = Number(get("day"));
+  if (!y || !m || !d) return null;
+  return { y, m, d };
+}
+
+function ymdCompare(a, b) {
+  if (a.y !== b.y) return a.y < b.y ? -1 : 1;
+  if (a.m !== b.m) return a.m < b.m ? -1 : 1;
+  if (a.d !== b.d) return a.d < b.d ? -1 : 1;
+  return 0;
+}
+
+function ymdToUtcDayNumber(ymd) {
+  return Math.floor(Date.UTC(ymd.y, ymd.m - 1, ymd.d) / (24 * 60 * 60 * 1000));
+}
+
+function daysBetweenYmd(a, b) {
+  return ymdToUtcDayNumber(b) - ymdToUtcDayNumber(a);
+}
+
+function daysInMonthUtc(y, m1) {
+  // m1 is 1..12
+  return new Date(Date.UTC(y, m1, 0)).getUTCDate();
+}
+
+function monthlyAnniversaryYmdForMonth({ y, m }, preferredDay) {
+  const dim = daysInMonthUtc(y, m);
+  const d = Math.min(preferredDay, dim);
+  return { y, m, d };
+}
+
+function addMonthsToYearMonth({ y, m }, deltaMonths) {
+  const idx = (y * 12 + (m - 1)) + deltaMonths;
+  const y2 = Math.floor(idx / 12);
+  const m2 = (idx % 12) + 1;
+  return { y: y2, m: m2 };
+}
+
+function ordinalSuffix(n) {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return "th";
+  const mod10 = n % 10;
+  if (mod10 === 1) return "st";
+  if (mod10 === 2) return "nd";
+  if (mod10 === 3) return "rd";
+  return "th";
+}
+
+function formatMonthDayOrdinalYmd(ymd, timeZone) {
+  // Use UTC noon so formatting in the target time zone stays on the same calendar date.
+  const dt = new Date(Date.UTC(ymd.y, ymd.m - 1, ymd.d, 12, 0, 0));
+  const month = new Intl.DateTimeFormat(undefined, { month: "short", timeZone }).format(dt);
+  return `${month} ${ymd.d}${ordinalSuffix(ymd.d)}, ${ymd.y}`;
+}
+
+function getMonthlyAnniversaryOccurrences({ startYmd, fromYmd, preferredDay, count }) {
+  const out = [];
+  const startYm = { y: startYmd.y, m: startYmd.m };
+  let ym = { y: Math.max(fromYmd.y, startYm.y), m: fromYmd.y < startYm.y ? startYm.m : fromYmd.m };
+
+  // Ensure ym isn't before the relationship start month.
+  if (ym.y === startYm.y && ym.m < startYm.m) ym = { ...startYm };
+
+  // Find first occurrence >= both start date and from date.
+  for (;;) {
+    const occ = monthlyAnniversaryYmdForMonth(ym, preferredDay);
+    if (ymdCompare(occ, startYmd) >= 0 && ymdCompare(occ, fromYmd) >= 0) break;
+    ym = addMonthsToYearMonth(ym, 1);
+  }
+
+  for (let i = 0; i < count; i += 1) {
+    const occ = monthlyAnniversaryYmdForMonth(ym, preferredDay);
+    out.push(occ);
+    ym = addMonthsToYearMonth(ym, 1);
+  }
+  return out;
+}
+
 function localYyyyMmDd(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -63,12 +169,13 @@ function daysBetweenLocalMidnights(a, b) {
   return Math.floor((b0 - a0) / ms);
 }
 
-function formatDateFriendly(d) {
+function formatDateFriendly(d, timeZone) {
   return d.toLocaleDateString(undefined, {
     weekday: "short",
     year: "numeric",
     month: "short",
     day: "numeric",
+    ...(timeZone ? { timeZone } : {}),
   });
 }
 
@@ -115,26 +222,31 @@ function initStats() {
   setText("gfName", CONFIG.girlfriendName);
   setText("editedBy", CONFIG.editedBy || "");
 
-  const start = parseLocalDateYYYYMMDD(CONFIG.relationshipStartLocalDate);
-  const today = new Date();
+  const tz = CONFIG.displayTimeZone || "America/Los_Angeles";
+  const startYmd = parseYmd(CONFIG.relationshipStartLocalDate);
+  const todayYmd = getTimeZoneYmd(new Date(), tz);
+  const todayForDisplay = todayYmd
+    ? new Date(Date.UTC(todayYmd.y, todayYmd.m - 1, todayYmd.d, 12, 0, 0))
+    : new Date();
+
   let daysTogether = null;
-  if (start) {
-    const days = Math.max(0, daysBetweenLocalMidnights(start, today));
+  if (startYmd && todayYmd) {
+    const days = Math.max(0, daysBetweenYmd(startYmd, todayYmd));
     daysTogether = days;
     setText("daysTogether", `${days}`);
-    setText("togetherSince", `Since ${formatDateFriendly(start)}`);
+    setText(
+      "togetherSince",
+      `Since ${formatDateFriendly(
+        new Date(Date.UTC(startYmd.y, startYmd.m - 1, startYmd.d, 12, 0, 0)),
+        tz,
+      )}`,
+    );
   } else {
     setText("daysTogether", "—");
     setText("togetherSince", "Set a start date in app.js");
   }
 
-  const miles = haversineMiles(
-    CONFIG.cityA.lat,
-    CONFIG.cityA.lon,
-    CONFIG.cityB.lat,
-    CONFIG.cityB.lon,
-  );
-  setText("distanceMiles", `${Math.round(miles)} mi`);
+  setText("distanceMiles", `105 miles apart`);
 
   if (daysTogether !== null) {
     setText("puzzleNumber", String(daysTogether));
@@ -142,22 +254,48 @@ function initStats() {
 
   setText(
     "footDate",
-    today.toLocaleDateString(undefined, {
+    todayForDisplay.toLocaleDateString(undefined, {
       month: "long",
       day: "numeric",
       year: "numeric",
+      timeZone: tz,
     }),
   );
 
-  // Countdown (optional)
-  const next = parseLocalDateYYYYMMDD(CONFIG.nextVisitLocalDate);
-  if (!next) {
-    setText("countdown", "—");
-    setText("nextVisitDate", "Add a date in app.js (optional)");
+  // Monthly anniversaries (30th; Feb falls back to 28th/29th).
+  if (startYmd && todayYmd) {
+    const preferredDay = Number(CONFIG.monthlyAnniversaryDay) || 30;
+    const occurrences = getMonthlyAnniversaryOccurrences({
+      startYmd,
+      fromYmd: todayYmd,
+      preferredDay,
+      count: 12,
+    });
+
+    const nextOcc = occurrences[0];
+
+    const daysTil = Math.max(0, daysBetweenYmd(todayYmd, nextOcc));
+    setText("countdown", `${daysTil} ${daysTil === 1 ? "day" : "days"}`);
+
+    // "Happy X months" only on the anniversary day.
+    const thisMonthOcc = monthlyAnniversaryYmdForMonth(
+      { y: todayYmd.y, m: todayYmd.m },
+      preferredDay,
+    );
+    const isTodayAnniversary = ymdCompare(todayYmd, thisMonthOcc) === 0;
+    const monthsNow =
+      (todayYmd.y - startYmd.y) * 12 + (todayYmd.m - startYmd.m);
+    if (isTodayAnniversary && monthsNow >= 1) {
+      setText("anniversaryMsgSep", " • ");
+      setText("anniversaryMessage", `Happy ${monthsNow} Months!`);
+    } else {
+      setText("anniversaryMsgSep", "");
+      setText("anniversaryMessage", "");
+    }
   } else {
-    setText("nextVisitDate", formatDateFriendly(next));
-    setText("countdown", formatCountdown(next));
-    setInterval(() => setText("countdown", formatCountdown(next)), 60 * 1000);
+    setText("countdown", "—");
+    setText("anniversaryMsgSep", "");
+    setText("anniversaryMessage", "");
   }
 }
 
@@ -505,11 +643,10 @@ async function renderScoreboard(ctx) {
           <span class="legendItem"><span class="swatch bad"></span>1/3 × ${t["1/3"]}</span>
           <span class="legendItem"><span class="swatch mid"></span>2/3 × ${t["2/3"]}</span>
           <span class="legendItem"><span class="swatch good"></span>3/3 × ${t["3/3"]}</span>
-          ${
-            t.incomplete > 0
-              ? `<span class="legendItem">incomplete × ${t.incomplete}</span>`
-              : ""
-          }
+          ${t.incomplete > 0
+          ? `<span class="legendItem">incomplete × ${t.incomplete}</span>`
+          : ""
+        }
         </div>
       `;
       return bar + legend;
@@ -567,7 +704,9 @@ function pickAvailableQuizDayKey(raw, requestedKey) {
 }
 
 function initQuizUI(ctx) {
-  const requestedKey = localYyyyMmDd(new Date());
+  const tz = CONFIG.displayTimeZone || "America/Los_Angeles";
+  const reqYmd = getTimeZoneYmd(new Date(), tz);
+  const requestedKey = reqYmd ? ymdToKey(reqYmd) : localYyyyMmDd(new Date());
   setText("quizDate", requestedKey);
   // Render immediately so menu isn't stuck on "—"
   renderScoreboard({
@@ -954,7 +1093,7 @@ function initHelp() {
   btn?.addEventListener("click", () => {
     // Simple, Wordle-like help.
     window.alert(
-      "How to play Message Mayhem:\n\n- Read the message.\n- Tap JAMES or JESS to guess who said it.\n- Each day has 3 questions.\n- A row turns green if you’re correct, gray if you’re wrong.\n- Your accuracy is saved in the cloud (shared).",
+      "How to play Message Mayhem:\n\n- Read the message.\n- Tap Who Said It.\n- Each day has 3 questions.\n- A row turns green if you’re correct, gray if you’re wrong.\n- Your accuracy is saved in the cloud (shared).",
     );
   });
 }

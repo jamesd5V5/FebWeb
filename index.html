@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Message Mayhem</title>
+    <meta
+      name="description"
+      content="Message Mayhem — a daily who-said-it message quiz."
+    />
+
+    <link rel="preconnect" href="https://unpkg.com" />
+
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+
+  <body>
+    <div class="authOverlay" id="authOverlay" aria-hidden="true">
+      <div class="authCard" role="dialog" aria-modal="true">
+        <div class="authTitle">Message Mayhem</div>
+        <div class="authSub">Sign in (Supabase)</div>
+
+        <form id="authForm" class="authForm" autocomplete="on">
+          <label class="field">
+            <span class="fieldLabel">Email</span>
+            <input id="authEmail" type="email" autocomplete="email" required />
+          </label>
+
+          <label class="field">
+            <span class="fieldLabel">Password</span>
+            <input
+              id="authPassword"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </label>
+
+          <div class="authRow">
+            <button class="key keyPrimary authBtn" id="authSignInBtn" type="submit">
+              Sign in
+            </button>
+            <button class="key authBtn" id="authSignUpBtn" type="button">
+              Sign up
+            </button>
+          </div>
+          <div class="authError" id="authError"></div>
+        </form>
+      </div>
+    </div>
+
+    <header class="topbar">
+      <details class="menu" id="menu">
+        <summary class="iconBtn" aria-label="Menu">☰</summary>
+        <div class="menuCard" role="dialog" aria-label="Menu panel">
+          <div class="menuTitle">Message Mayhem</div>
+          <div class="menuSection">
+            <div class="menuRow">
+              <div class="menuLabel">Signed in as</div>
+              <div class="menuValue" id="signedInAs">—</div>
+            </div>
+          </div>
+
+          <div class="menuSection">
+            <div class="menuRow">
+              <div class="menuLabel">Today</div>
+              <div class="menuValue" id="quizDate">—</div>
+            </div>
+            <div class="menuRow">
+              <div class="menuLabel">Accuracy (all days)</div>
+              <div class="menuValue" id="myAccuracy">—</div>
+            </div>
+            <div class="menuHint" id="myAccuracyFine">—</div>
+            <div class="scoreWrap">
+              <div class="scoreTitle">Today (per question)</div>
+              <div class="scoreGrid" id="todayScoreGrid">—</div>
+            </div>
+
+            <div class="scoreWrap">
+              <div class="scoreTitle">Overall (days finished)</div>
+              <div class="scoreOverall" id="overallScore">—</div>
+            </div>
+          </div>
+
+          <div class="menuFooter">
+            <button class="menuLogout" id="logoutBtn" type="button">Log out</button>
+          </div>
+        </div>
+      </details>
+
+      <div class="title">Message Mayhem</div>
+
+      <div class="topIcons">
+        <button class="iconBtn" id="helpBtn" type="button" aria-label="Help">
+          ?
+        </button>
+      </div>
+    </header>
+
+    <main class="game">
+      <div class="boardWrap">
+        <div class="board" id="board" aria-label="Game board"></div>
+      </div>
+
+      <section class="clue" aria-label="Clue panel">
+        <div class="clueHeader">
+          <div class="clueTitle">Who said this?</div>
+          <div class="clueMeta" id="clueMeta">—</div>
+        </div>
+        <div class="clueText" id="clueText">Loading…</div>
+        <div class="clueStatus" id="clueStatus">—</div>
+      </section>
+
+      <section class="keyboard" aria-label="Keyboard">
+        <div class="keyRow">
+          <button class="key keyWide" id="keyJames" type="button">JAMES</button>
+          <button class="key keyWide" id="keyJess" type="button">JESS</button>
+        </div>
+        <div class="keyRow">
+          <button class="key keyWide" id="keyNext" type="button">NEXT</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footnote">
+      <div class="footRow">
+        <div class="footDate" id="footDate">—</div>
+        <div class="footNo">
+          No. <span id="puzzleNumber">—</span>
+        </div>
+      </div>
+      <div class="footRow footStats">
+        <span><span id="daysTogether">—</span> days together</span>
+        <span>•</span>
+        <span><span id="distanceMiles">—</span> apart</span>
+        <span>•</span>
+        <span>meet in <span id="countdown">—</span></span>
+      </div>
+      <div class="footRow footHint">
+        <span id="togetherSince">—</span> • <span id="nextVisitDate">—</span>
+      </div>
+      <div class="footRow footHint">
+        <span id="editedBy">Edited by James</span>
+      </div>
+    </footer>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

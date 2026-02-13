@@ -1,0 +1,11 @@
+# Never upload your full message exports
+J&JMessages*.csv
+*.csv
+
+# Local-only outputs (full history)
+local-output/
+private/
+
+# OS / editor
+.DS_Store
+Thumbs.db

@@ -512,15 +512,35 @@ function setQuizStatus(text) {
   el.textContent = text;
 }
 
+async function fetchAllQuizAnswersForCouple(coupleId) {
+  // Supabase/PostgREST commonly caps responses (~1000 rows) unless you paginate.
+  // After enough days, scoreboard stats can "freeze" because new rows fall outside the first page.
+  const pageSize = 1000;
+  const out = [];
+  for (let from = 0; from < 100000; from += pageSize) {
+    const { data, error } = await sb
+      .from("quiz_answers")
+      .select("user_id, correct, day_key, question_id")
+      .eq("couple_id", coupleId)
+      // Deterministic ordering so paging is stable.
+      .order("day_key", { ascending: true })
+      .order("question_id", { ascending: true })
+      .order("user_id", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw error;
+    const chunk = Array.isArray(data) ? data : [];
+    out.push(...chunk);
+    if (chunk.length < pageSize) break;
+  }
+  return out;
+}
+
 async function renderScoreboard(ctx) {
   const { coupleId, userId, activeRole, activeDisplayName } = ctx;
   setText("signedInAs", activeDisplayName || CONFIG.auth.displayName[activeRole] || "—");
 
-  const { data, error } = await sb
-    .from("quiz_answers")
-    .select("user_id, correct, day_key, question_id")
-    .eq("couple_id", coupleId);
-  if (error) throw error;
+  const list = await fetchAllQuizAnswersForCouple(coupleId);
 
   const otherRole = activeRole === "james" ? "jess" : "james";
   const stats = {
@@ -528,7 +548,6 @@ async function renderScoreboard(ctx) {
     jess: { correct: 0, total: 0 },
   };
 
-  const list = Array.isArray(data) ? data : [];
   for (const row of list) {
     // couple_members is locked down to "read own row" to avoid RLS recursion.
     // Since only two roles exist and (couple_id, role) is unique, we can bucket as:
